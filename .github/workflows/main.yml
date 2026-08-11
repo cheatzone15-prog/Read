@@ -18,29 +18,35 @@ jobs:
       run: sudo apt update && sudo apt install -y build-essential
 
     # ========================
-    # 1. Compile bot (native)
+    # 1. Compile normal bot (to verify compilation)
     # ========================
-    - name: Compile bot (x86_64)
+    - name: Compile bot (native x86_64)
       run: gcc -o bot bot.c -lpthread
 
-    # ========================
-    # 2. Verify binary is executable
-    # ========================
-    - name: Check bot binary
+    - name: Verify bot binary
       run: file bot | grep -q "executable" && echo "✅ bot is executable"
 
     # ========================
-    # 3. Run bot in background with timeout
-    #    (bot will try to connect to CNC, but we timeout after 3 seconds)
+    # 2. Create a debug version (no daemonize) for runtime test
     # ========================
-    - name: Run bot (test mode)
+    - name: Create debug bot (no daemonize)
       run: |
-        chmod +x bot
-        timeout 3 ./bot default &
-        sleep 1
-        if pgrep -f "./bot"; then
+        cp bot.c bot_debug.c
+        # Comment out daemonize line
+        sed -i 's/^[[:space:]]*daemonize(argc, argv);/\/\/ daemonize(argc, argv);/' bot_debug.c
+        # Compile statically to avoid missing libs
+        gcc -static -o bot_debug bot_debug.c -lpthread
+
+    # ========================
+    # 3. Run debug bot in background and check if it stays alive
+    # ========================
+    - name: Run debug bot (test mode)
+      run: |
+        ./bot_debug default &
+        sleep 2
+        if pgrep -f "bot_debug"; then
           echo "✅ Bot is running (process found)"
-          pkill -f "./bot" || true
+          pkill -f bot_debug || true
         else
           echo "❌ Bot did not start or crashed immediately"
           exit 1
