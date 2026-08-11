@@ -1,0 +1,59 @@
+name: Bot Compilation and Run Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: sudo apt update && sudo apt install -y build-essential
+
+    # ========================
+    # 1. Compile bot (native)
+    # ========================
+    - name: Compile bot (x86_64)
+      run: gcc -o bot bot.c -lpthread
+
+    # ========================
+    # 2. Verify binary is executable
+    # ========================
+    - name: Check bot binary
+      run: file bot | grep -q "executable" && echo "✅ bot is executable"
+
+    # ========================
+    # 3. Run bot in background with timeout
+    #    (bot will try to connect to CNC, but we timeout after 3 seconds)
+    # ========================
+    - name: Run bot (test mode)
+      run: |
+        chmod +x bot
+        timeout 3 ./bot default &
+        sleep 1
+        if pgrep -f "./bot"; then
+          echo "✅ Bot is running (process found)"
+          pkill -f "./bot" || true
+        else
+          echo "❌ Bot did not start or crashed immediately"
+          exit 1
+        fi
+
+    # ========================
+    # (Optional) Compile CNC if you want to test both
+    # ========================
+    - name: (Optional) Compile CNC server
+      run: |
+        if [ -f cnc.c ]; then
+          gcc -o cnc cnc.c -lpthread
+          file cnc | grep -q "executable" && echo "✅ CNC compiled"
+        else
+          echo "⚠️ cnc.c not found, skipping"
+        fi
